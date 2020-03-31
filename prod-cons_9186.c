@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/time.h>
+
 #include <math.h>
 
 #define QUEUESIZE 20
@@ -30,26 +31,31 @@
 void *producer (void *args);
 void *consumer (void *args);
 
+/*
+*   return time in (int) nanoseconds
+*/
 int get_time() {
         struct timeval tv;
         gettimeofday(&tv, NULL);
         return (tv.tv_sec*1000000 + tv.tv_usec) ;
 }
 
+/*
+*   Work fuction for queue
+*/
 void *workfunc(void * a)
 {
   int* b = a;
   //printf ("Work in Function. ");
   //printf ("a= %d from %ld\n",*b, pthread_self());
-
   //usleep(2000);
-
-  for (double i = 0; i < 10+(*b); i++) {
+  for (double i = 0; i < 10+(*b); i++)
     sin(i*(3.14+(*b)));
-  }
-
 }
 
+/*
+*   new struct for queue
+*/
 typedef struct {
  void * (*work)(void *);
  void * arg;
@@ -64,10 +70,15 @@ typedef struct {
   pthread_cond_t *notFull, *notEmpty;
 } queue;
 
+/*
+*   Using to get time
+*/
 int *times;
 int myindex=0;
 pthread_mutex_t *time_mux;
-int flag=0;
+
+int flag=0;   // use to end consumer threads
+
 
 queue *queueInit (void);
 void queueDelete (queue *q);
@@ -77,25 +88,27 @@ void queueDel (queue *q, int *out);
 int main ( int argc, char *argv[] )
 {
 
-
+  /*
+  *   Command line args
+  */
   int p,q;
   if( argc == 3 && atoi(argv[1])>0 && atoi(argv[2])>0 ) {
-   p=atoi(argv[1]);
-   q=atoi(argv[2]);
-   //printf("p=%d q=%d\n",p,q );
+    p=atoi(argv[1]);
+    q=atoi(argv[2]);
   }
-else {
-  p=P;
-  q=Q;
-  printf("p=%d q=%d\n",p,q );
-}
+  else {
+    p=P;  //  Default value for producer
+    q=Q;  //  Default value for consumer
+    printf("p=%d q=%d\n",p,q );
+  }
 
+  //  Mutex for time array
   time_mux=(pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
   if (pthread_mutex_init(time_mux, NULL) != 0) {
       printf("\n mutex init has failed\n");
       return 1;
   }
-  times=(int *)malloc(sizeof(int)*LOOP*p);
+  times=(int *)malloc(sizeof(int)*LOOP*p);  // Array with times of cache
 
   queue *fifo;
   pthread_t *pro=(pthread_t *)malloc(p*sizeof(pthread_t));
@@ -106,6 +119,7 @@ else {
     fprintf (stderr, "main: Queue Init failed.\n");
     exit (1);
   }
+
 
   for (int i = 0; i < p; i++)
       pthread_create (&pro[i], NULL, producer, fifo);
@@ -118,13 +132,16 @@ else {
   for (int i = 0; i < p; i++)
       pthread_join (pro[i], NULL);
 
-
+  /*
+  *   Wait for queue empty
+  */
   while (fifo->empty!=1)
     usleep(1000);
 
 
 
   flag=1; //exit pthreads consumers
+
 
   pthread_mutex_lock (fifo->mut);
 
@@ -137,6 +154,7 @@ else {
 
 
   for (int i = 0; i < q; i++)
+
     pthread_join (con[i],NULL);
 
   pthread_mutex_destroy (time_mux);
@@ -266,8 +284,6 @@ void queueAdd (queue *q, int in)
   ((int *)q->buf[q->tail].arg)[0] = in;
   ((int *)q->buf[q->tail].arg)[1] = get_time();
 
-  //q->buf[q->tail].work(q->buf[q->tail].arg);
-  //printf("%d\n", ((int *)q->buf[q->tail].arg)[0] );
 
   q->tail++;
   if (q->tail == QUEUESIZE)
